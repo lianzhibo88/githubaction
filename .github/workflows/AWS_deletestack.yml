@@ -1,0 +1,30 @@
+name: Delete Cloudformation stack
+
+on: 
+  workflow_dispatch:
+jobs:
+
+  delete-cloud-resources:
+    name: Delete Cloud Resources
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+    #Checkout the code
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    # Configure AWS Github OIDC
+    - name: Configure AWS credentials from GitHub OIDC Customer
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        role-to-assume: arn:aws:iam::975050149909:role/test-cloudformation
+        aws-region: us-east-1
+    
+    - name: delete Stack
+      run: |
+            aws cloudformation delete-stack \
+            --stack-name teststack \
+
