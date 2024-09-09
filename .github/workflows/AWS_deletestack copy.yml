@@ -20,11 +20,11 @@ jobs:
     - name: Configure AWS credentials from GitHub OIDC Customer
       uses: aws-actions/configure-aws-credentials@v1
       with:
-        role-to-assume: arn:aws:iam::975050149909:role/test-cloudformation
+        role-to-assume: arn:aws:iam::975050149909:role/test-github
         aws-region: us-east-1
     
     - name: delete Stack
       run: |
             aws cloudformation delete-stack \
-            --stack-name teststack \
+            --stack-name testaaa \
 
