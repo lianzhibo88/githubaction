@@ -17,9 +17,9 @@ jobs:
       - name: Git clone the repository
         uses: actions/checkout@v3
       - name: configure aws credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v1
         with:
-          audience: sts.amazonaws.com.cn
+          #audience: sts.amazonaws.com.cn
           role-to-assume: arn:aws:iam::975050149909:role/test-github
           #role-session-name: samplerolesession
           aws-region: ${{ env.AWS_REGION }}
