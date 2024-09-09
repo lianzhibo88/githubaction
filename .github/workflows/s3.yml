@@ -19,7 +19,6 @@ jobs:
       - name: configure aws credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
-          #audience: sts.amazonaws.com.cn
           role-to-assume: arn:aws:iam::975050149909:role/test-github
           #role-session-name: samplerolesession
           aws-region: ${{ env.AWS_REGION }}
