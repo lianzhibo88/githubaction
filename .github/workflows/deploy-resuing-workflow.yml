@@ -1,0 +1,227 @@
+name: Deploy Reusing Workflow
+on:
+  workflow_dispatch:
+    inputs:
+      serviceType:
+        description: "Service Type For AWS"
+        required: true
+        default: "Lambda"
+        type: choice
+        options:
+          - Lambda
+          - Lambda-Layer
+          - ECS
+          - Glue
+      serviceName:
+        description: "Service Name For AWS"
+        required: true
+        default: "warning"
+        type: choice
+        options:
+          - lambda-layer
+          - lambda-job-auto-regist-dummy-doctor
+          - lambda-job-bg-unwarning
+          - lambda-job-bg-warning
+          - lambda-job-calpatientbg
+          - lambda-job-cv-pen-bind-data
+          - lambda-job-cv-pen-data-status
+          - lambda-job-cv-pen-record-data
+          - lambda-job-delete-deenrollment
+          - lambda-job-dxy-data-trans
+          - lambda-job-idctr-get-t4-dctr
+          - lambda-job-patient-ddc-cal
+          - lambda-job-rltn-trtry-dctr
+          - lambda-job-salesorgchart
+          - lambda-job-set-intelligent-summy
+          - lambda-job-supply-dsm-card
+          - lambda-job-update-card-info
+          - lambda-job-update-idctr-info
+          - lambda-job-update-patient-info
+          - lambda-runtime-cv-bg-data
+          - lambda-runtime-cv-pen-record-data
+          - lambda-signature
+          - lambda-job-page-track
+          - lambda-job-nobgdatadays-count
+          - lambda-job-no-any-bgdata
+          - glue-cards-sync
+          - glue-course-sync
+          - glue-devicebinding-sync
+          - glue-devices-sync
+          - glue-familymember-sync
+          - glue-injectiondataraw-sync
+          - glue-intelligentsummycourse-sync
+          - glue-intelligentsummyque-sync
+          - glue-medicalorder-sync
+          - glue-medication-sync
+          - glue-patient-sync
+          - glue-patientcourse-sync
+          - glue-patientddcreason-sync
+          - glue-penbindinginfo-sync
+          - glue-pensyncstatusinfo-sync
+          - glue-rltntrtrydctr-sync
+          - glue-salesorgchart-sync
+          - glue-shippinginfo-sync
+          - glue-t4doctor-sync
+          - glue-treatments-sync
+          - glue-patientddcmsg-sync
+          - glue-integral-sync
+          - ecs-sell
+          - ecs-patient
+          - ecs-manage
+          - ecs-openapi
+          - ecs-doctor
+          - ecs-schedule
+env:
+  ENV_TYPE: d #d:dev q:qa p:prd
+  AWS_REGION: cn-northwest-1
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs: # steps.step1.outputs.result json string
+      serviceName: ${{ fromJSON(steps.step1.outputs.result).serviceName }}
+      envType: ${{ fromJSON(steps.step1.outputs.result).envtype }}
+      awsRegion: ${{ fromJSON(steps.step1.outputs.result).awsRegion }}
+      cpu: ${{ fromJSON(steps.step1.outputs.result).cpu }}
+      memory: ${{ fromJSON(steps.step1.outputs.result).memory }}
+      localServiceName: ${{ fromJSON(steps.step1.outputs.result).localServiceName }}
+      hasGUI: ${{ fromJSON(steps.step1.outputs.result).hasGUI }}
+    steps:
+      - uses: actions/github-script@v6
+        id: step1
+        name: deal with Ver
+        with:
+          script: | #nodejs16 code
+            const serviceType='${{github.event.inputs.serviceType}}';
+            const initServiceName='${{github.event.inputs.serviceName}}';
+            let serviceName=initServiceName.split('-').slice(1).join('-');
+            if(serviceType == 'ECS') {
+              serviceName=initServiceName.split('-').slice(1).join('');
+            }
+            console.log(serviceName);
+            const result= {
+              serviceName:serviceName,
+              envtype:'d', //d:dev q:qa p:prd
+              awsRegion:'cn-northwest-1',
+              cpu:0,
+              memory:0,
+              localServiceName:'',
+              hasGUI:false
+            };
+            if(serviceType == 'ECS'){
+              const ecsDockerSizeSetting={
+                sell:{
+                  cpu:512,
+                  memory:1024,
+                  localServiceName:'qywechat',
+                  hasGUI:true
+                },
+                patient:{
+                  cpu:512,
+                  memory:1024,
+                  localServiceName:'patient',
+                  hasGUI:true
+                },
+                manage:{
+                  cpu:512,
+                  memory:1024,
+                  localServiceName:'management',
+                  hasGUI:true
+                },
+                openapi:{
+                  cpu:512,
+                  memory:1024,
+                  localServiceName:'api',
+                  hasGUI:false
+                },
+                doctor:{
+                  cpu:1024,
+                  memory:2048,
+                  localServiceName:'hcp',
+                  hasGUI:true
+                },
+                schedule:{
+                  cpu:512,
+                  memory:1024,
+                  localServiceName:'job',
+                  hasGUI:false
+                }
+              }
+              result.cpu=ecsDockerSizeSetting[serviceName].cpu;
+              result.memory=ecsDockerSizeSetting[serviceName].memory;
+              result.localServiceName=ecsDockerSizeSetting[serviceName].localServiceName;
+              result.hasGUI=ecsDockerSizeSetting[serviceName].hasGUI;
+            }
+            return result;
+  call_lambda_layer_workflow:
+    if: github.event.inputs.serviceType == 'Lambda-Layer'
+    # {path}/{filename}@{ref}
+    # https://docs.github.com/en/enterprise-server@3.4/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_iduses
+    # cannot specify version when calling local workflows
+    uses: ./.github/workflows/lambda-layer.yml
+    needs: prepare
+    with:
+      awsregion: ${{ needs.prepare.outputs.awsRegion }}
+      envtype: ${{ needs.prepare.outputs.envType }} # 跟着分支走 操作时能少选择一个
+    secrets:
+      aws-arm-role: ${{secrets.DEV_AWS_ACCESS_ROLE_ARN}}
+      # layer: ${{}}
+  test-job:
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [prepare]
+    steps:
+      - name: test
+        run: |
+          echo "'${{needs.prepare.outputs.cpu}}' ${{job.status}}"
+
+  call-lambda-workflow:
+    if: github.event.inputs.serviceType == 'Lambda'
+    uses: ./.github/workflows/lambda.yml
+    needs: [prepare]
+    with:
+      awsregion: ${{ needs.prepare.outputs.awsRegion }}
+      envtype: ${{ needs.prepare.outputs.envType }} # 跟着分支走 操作时能少选择一个
+      lambda: ${{ needs.prepare.outputs.serviceName }}
+      # lambda: ${{format(github.event.inputs.serviceName,'d')}}
+    secrets:
+      aws-arm-role: ${{secrets.DEV_AWS_ACCESS_ROLE_ARN}}
+      # lambda: ${{}}
+  call-glue-workflow:
+    if: github.event.inputs.serviceType == 'Glue'
+    uses: ./.github/workflows/glue.yml
+    needs: prepare
+    with:
+      awsregion: ${{ needs.prepare.outputs.awsRegion }}
+      envtype: ${{ needs.prepare.outputs.envType }}
+      glue: ${{ needs.prepare.outputs.serviceName }}
+      s3: lly-nw-com-lccp-d-s3-pri-01
+    secrets:
+      aws-arm-role: ${{secrets.DEV_AWS_ACCESS_ROLE_ARN}}
+  call-ecs-workflow:
+    if: ${{github.event.inputs.serviceType == 'ECS' && github.event.inputs.serviceName!='ecs-schedule'}}
+    uses: ./.github/workflows/ecs.yml
+    needs: prepare
+    with:
+      awsregion: ${{ needs.prepare.outputs.awsRegion }}
+      envtype: ${{ needs.prepare.outputs.envType }}
+      ecsname: ${{ needs.prepare.outputs.serviceName }}
+      cpu: ${{ needs.prepare.outputs.cpu }} #环境变量应该都死作为字符串处理
+      memory: ${{ needs.prepare.outputs.memory }}
+      localServiceName: ${{ needs.prepare.outputs.localServiceName }}
+      hasGUI: ${{ needs.prepare.outputs.hasGUI }}
+    secrets:
+      aws-arm-role: ${{secrets.DEV_AWS_ACCESS_ROLE_ARN}}
+  call-ecs-schedule-workflow:
+    if: ${{github.event.inputs.serviceType == 'ECS' && github.event.inputs.serviceName =='ecs-schedule'}}
+    uses: ./.github/workflows/ecs-job.yml
+    needs: prepare
+    with:
+      awsregion: ${{ needs.prepare.outputs.awsRegion }}
+      envtype: ${{ needs.prepare.outputs.envType }}
+      ecsname: ${{ needs.prepare.outputs.serviceName }}
+      cpu: ${{ needs.prepare.outputs.cpu }} #环境变量应该都死作为字符串处理
+      memory: ${{ needs.prepare.outputs.memory }}
+      localServiceName: ${{ needs.prepare.outputs.localServiceName }}
+    secrets:
+      aws-arm-role: ${{secrets.DEV_AWS_ACCESS_ROLE_ARN}}
